@@ -16,6 +16,11 @@ interface Props {
   onBackFromFirst?: () => void;
 }
 
+const MIN_REFLECTION_ANSWERS = 4;
+
+const countReflectionAnswers = (reflections: Profile['reflections']) =>
+  REFLECTION_PROMPTS.filter((p) => (reflections[p.key] || '').trim().length > 0).length;
+
 const ReflectionForm: React.FC<Props> = ({
   profile,
   updateProfile,
@@ -27,8 +32,10 @@ const ReflectionForm: React.FC<Props> = ({
 }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showExample, setShowExample] = useState(false);
+  const [minAnswersGate, setMinAnswersGate] = useState(false);
   const item = REFLECTION_PROMPTS[currentIndex];
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const totalReflectionPrompts = REFLECTION_PROMPTS.length;
 
   useEffect(() => {
     if (!typeform || readOnly) return;
@@ -41,6 +48,12 @@ const ReflectionForm: React.FC<Props> = ({
       setCurrentIndex(currentIndex + 1);
       setShowExample(false);
     } else if (typeform) {
+      const answered = countReflectionAnswers(profile.reflections);
+      if (answered < MIN_REFLECTION_ANSWERS) {
+        setMinAnswersGate(true);
+        return;
+      }
+      setMinAnswersGate(false);
       onCompleteSection?.();
     }
   };
@@ -57,8 +70,12 @@ const ReflectionForm: React.FC<Props> = ({
   if (typeform && !readOnly) {
     return (
       <div className="min-h-[50vh] flex flex-col justify-center px-1 pb-8">
-        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-6">
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-2">
           {currentIndex + 1} / {REFLECTION_PROMPTS.length}
+        </p>
+        <p className="text-base font-semibold text-[#f58434] mb-6">
+          Progress: {countReflectionAnswers(profile.reflections)} / {totalReflectionPrompts} answered (need at least{' '}
+          {MIN_REFLECTION_ANSWERS} to finish)
         </p>
         <AnimatePresence mode="wait">
           <TypeformSlide slideKey={item.key}>
@@ -88,17 +105,24 @@ const ReflectionForm: React.FC<Props> = ({
             <textarea
               ref={taRef}
               value={profile.reflections[item.key as keyof typeof profile.reflections] || ''}
-              onChange={(e) =>
+              onChange={(e) => {
+                setMinAnswersGate(false);
                 updateProfile({
                   reflections: { ...profile.reflections, [item.key]: e.target.value },
-                })
-              }
+                });
+              }}
               placeholder="Write 2–3 sentences…"
               rows={5}
               className="w-full p-4 bg-slate-50 rounded-2xl border-2 border-slate-200 outline-none text-base text-[#2c4869] focus:border-[#f58434] transition-colors"
             />
             {validationErrors[item.key] && (
               <p className={formFieldErrorClass}>{validationErrors[item.key]}</p>
+            )}
+            {minAnswersGate && currentIndex === REFLECTION_PROMPTS.length - 1 && (
+              <p className={formFieldErrorClass}>
+                You have answered {countReflectionAnswers(profile.reflections)} out of {totalReflectionPrompts}{' '}
+                questions. Please answer at least {MIN_REFLECTION_ANSWERS} to proceed.
+              </p>
             )}
             <TypeformNav
               showBack={currentIndex > 0 || !!onBackFromFirst}
@@ -114,9 +138,13 @@ const ReflectionForm: React.FC<Props> = ({
 
   return (
     <div className={`space-y-6 animate-in fade-in duration-500 ${readOnly ? 'opacity-60 pointer-events-none' : ''}`}>
-      <div className="text-center text-xs font-black text-[#2c4869]/40 uppercase tracking-widest mb-4">
+      <div className="text-center text-xs font-black text-[#2c4869]/40 uppercase tracking-widest mb-2">
         Step {currentIndex + 1} of {REFLECTION_PROMPTS.length}
       </div>
+      <p className="text-center text-base font-semibold text-[#f58434] mb-4">
+        Progress: {countReflectionAnswers(profile.reflections)} / {totalReflectionPrompts} answered (need at least{' '}
+        {MIN_REFLECTION_ANSWERS} to finish)
+      </p>
 
       <div className="p-8 bg-white rounded-3xl border border-slate-100 shadow-sm">
         <div className="flex items-center gap-3 mb-4">
