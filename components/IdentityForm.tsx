@@ -180,7 +180,7 @@ const IdentityForm: React.FC<Props> = ({
               <input
                 ref={inputRef as React.RefObject<HTMLInputElement>}
                 type="email"
-                value={profile.email}
+                value={profile.email || ''}
                 onChange={(e) => {
                   updateProfile({ email: e.target.value });
                   setShowEmailSuggestions(e.target.value.includes('@'));
@@ -191,7 +191,7 @@ const IdentityForm: React.FC<Props> = ({
                 className={typeformInputClass(!!validationErrors.email || emailErr)}
               />
               {showEmailSuggestions && filteredEmailDomains.length > 0 && emailPrefix.trim().length > 0 && (
-                <div className="mt-2 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                <div className="mt-1 border-0 border-b-2 border-[#2c4869]/30 bg-transparent overflow-hidden">
                   {filteredEmailDomains.map((domain) => (
                     <button
                       key={domain}
@@ -200,7 +200,7 @@ const IdentityForm: React.FC<Props> = ({
                         updateProfile({ email: `${emailPrefix}@${domain}` });
                         setShowEmailSuggestions(false);
                       }}
-                      className="w-full text-left px-3 py-2 text-sm text-[#2c4869] hover:bg-slate-50"
+                      className="w-full text-left px-0 py-2 text-base sm:text-lg font-medium text-gray-800 bg-transparent hover:bg-[#2c4869]/10 border-0 border-b border-[#2c4869]/15 last:border-b-0"
                     >
                       {emailPrefix}@{domain}
                     </button>
@@ -226,9 +226,11 @@ const IdentityForm: React.FC<Props> = ({
                 ref={inputRef as React.RefObject<HTMLInputElement>}
                 type="text"
                 value={profile.location}
-                onChange={(e) => updateProfile({ location: e.target.value })}
+                onChange={(e) =>
+                  updateProfile({ location: e.target.value.replace(/[^a-zA-Z\s]/g, '') })
+                }
                 onKeyDown={onKeyDown}
-                placeholder="City, state or region"
+                placeholder="City state or region"
                 className={typeformInputClass(!!validationErrors.location || locErr)}
               />
               {(validationErrors.location || locErr) && (
@@ -299,7 +301,7 @@ const IdentityForm: React.FC<Props> = ({
           <label className="block text-sm font-bold text-[#2c4869] mb-2 tracking-tight">Email address</label>
           <input 
             type="email" 
-            value={profile.email}
+            value={profile.email || ''}
             onChange={(e) => updateProfile({ email: e.target.value })}
             placeholder="e.g. name@university.edu"
             disabled={readOnly}
@@ -315,8 +317,8 @@ const IdentityForm: React.FC<Props> = ({
           <input 
             type="text" 
             value={profile.location}
-            onChange={(e) => updateProfile({ location: e.target.value })}
-            placeholder="e.g. Pune, Maharashtra"
+            onChange={(e) => updateProfile({ location: e.target.value.replace(/[^a-zA-Z\s]/g, '') })}
+            placeholder="e.g. Pune Maharashtra"
             disabled={readOnly}
             className={`w-full px-4 py-3 rounded-xl border ${validationErrors.location ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 focus:ring-2 focus:ring-[#f58434]'} focus:border-transparent outline-none transition-all disabled:bg-slate-50 font-medium`}
           />

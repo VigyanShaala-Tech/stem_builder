@@ -1,5 +1,5 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import { Profile } from '../types';
 import { DEGREE_OPTIONS, STEM_HIERARCHY } from '../constants';
@@ -19,6 +19,17 @@ interface Props {
 
 const ACADEMIC_TF_STEPS = 8;
 
+/** Defer until after React applies draft profile updates (avoids completing with stale specialization). */
+const afterProfileFlush = (fn: () => void) => {
+  queueMicrotask(() => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        fn();
+      });
+    });
+  });
+};
+
 const AcademicForm: React.FC<Props> = ({
   profile,
   updateProfile,
@@ -35,6 +46,16 @@ const AcademicForm: React.FC<Props> = ({
   const subFields = (profile.topLevelCategory && profile.specializationCategory && profile.specializationCategory !== 'Other') 
     ? [...STEM_HIERARCHY[profile.topLevelCategory][profile.specializationCategory], 'Other'] 
     : (profile.specializationCategory ? ['Other'] : []);
+
+  /** Keep stored specialization selectable in Edit when hierarchy options omit it (controlled binding). */
+  const specializationToggleOptions = useMemo(() => {
+    const base = subFields.map((sub) => ({ label: sub, value: sub }));
+    const s = (profile.specialization || '').trim();
+    if (s && !subFields.includes(s)) {
+      return [...base, { label: s, value: s }];
+    }
+    return base;
+  }, [subFields, profile.specialization]);
 
   const [step, setStep] = useState(0);
   const [attemptedNext, setAttemptedNext] = useState(false);
@@ -99,7 +120,10 @@ const AcademicForm: React.FC<Props> = ({
         return !!profile.degreeType;
       case 3:
         if (profile.academicStatus === 'studying') return !!profile.yearOfStudy;
-        if (profile.academicStatus === 'graduated') return (profile.graduationYear || '').trim().length > 0;
+        if (profile.academicStatus === 'graduated') {
+          const gy = (profile.graduationYear || '').trim();
+          return /^\d{4}$/.test(gy);
+        }
         return false;
       case 4:
         return (currentCgpa.trim().length > 0 || currentPercentage.trim().length > 0) && !cgpaInputError;
@@ -161,8 +185,8 @@ const AcademicForm: React.FC<Props> = ({
                   }}
                   className={`flex-1 py-4 rounded-2xl border-2 font-bold text-base transition-all ${
                     profile.academicStatus === 'studying'
-                      ? 'border-[#2c4869] bg-[#2c4869] text-white shadow-md'
-                      : 'border-slate-200 text-[#2c4869] hover:border-[#2c4869]/40'
+                      ? 'border-[#f58434] bg-[#f58434] text-white shadow-md'
+                      : 'border-slate-200 text-[#2c4869] hover:border-[#f58434]/50'
                   }`}
                 >
                   Currently studying
@@ -176,8 +200,8 @@ const AcademicForm: React.FC<Props> = ({
                   }}
                   className={`flex-1 py-4 rounded-2xl border-2 font-bold text-base transition-all ${
                     profile.academicStatus === 'graduated'
-                      ? 'border-[#2c4869] bg-[#2c4869] text-white shadow-md'
-                      : 'border-slate-200 text-[#2c4869] hover:border-[#2c4869]/40'
+                      ? 'border-[#f58434] bg-[#f58434] text-white shadow-md'
+                      : 'border-slate-200 text-[#2c4869] hover:border-[#f58434]/50'
                   }`}
                 >
                   Graduated / Alumni
@@ -229,7 +253,7 @@ const AcademicForm: React.FC<Props> = ({
               </label>
               <TypeformToggleGroup
                 columns={2}
-                value={profile.degreeType}
+                value={profile.degreeType || ''}
                 onSelect={(value) => {
                   updateProfile({ degreeType: value });
                   setAttemptedNext(false);
@@ -259,7 +283,7 @@ const AcademicForm: React.FC<Props> = ({
                   </label>
                   <TypeformToggleGroup
                     columns={2}
-                    value={profile.yearOfStudy}
+                    value={profile.yearOfStudy || ''}
                     onSelect={(value) => {
                       updateProfile({ yearOfStudy: value });
                       setAttemptedNext(false);
@@ -282,15 +306,32 @@ const AcademicForm: React.FC<Props> = ({
                   <input
                     ref={inputRef as React.RefObject<HTMLInputElement>}
                     type="text"
+                    inputMode="numeric"
+                    maxLength={4}
+                    autoComplete="off"
+                    pattern="\d{4}"
                     value={profile.graduationYear || ''}
-                    onChange={(e) => updateProfile({ graduationYear: e.target.value })}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+                      updateProfile({ graduationYear: digits });
+                    }}
                     onKeyDown={onKeyDown}
                     placeholder="e.g. 2023"
-                    className={typeformInputClass(!!validationErrors.graduationYear || (attemptedNext && !(profile.graduationYear || '').trim()))}
+                    className={typeformInputClass(
+                      !!validationErrors.graduationYear ||
+                        (attemptedNext &&
+                          !/^\d{4}$/.test((profile.graduationYear || '').trim()))
+                    )}
                   />
-                  {(validationErrors.graduationYear || (attemptedNext && !(profile.graduationYear || '').trim())) && (
+                  {(validationErrors.graduationYear ||
+                    (attemptedNext && !(profile.graduationYear || '').trim())) && (
                     <p className={formFieldErrorClass}>{validationErrors.graduationYear || 'Required'}</p>
                   )}
+                  {attemptedNext &&
+                    (profile.graduationYear || '').trim().length > 0 &&
+                    !/^\d{4}$/.test((profile.graduationYear || '').trim()) && (
+                      <p className={formFieldErrorClass}>Enter a valid 4-digit year</p>
+                    )}
                 </>
               )}
               <TypeformNav
@@ -299,7 +340,7 @@ const AcademicForm: React.FC<Props> = ({
                 onNext={goNext}
                 nextDisabled={
                   profile.academicStatus === 'graduated'
-                    ? !(profile.graduationYear || '').trim()
+                    ? !/^\d{4}$/.test((profile.graduationYear || '').trim())
                     : resumeEdit
                     ? !profile.yearOfStudy
                     : false
@@ -461,8 +502,14 @@ const AcademicForm: React.FC<Props> = ({
 
           {step === 6 && (
             <TypeformSlide slideKey={6}>
-              <label className={typeformLabelClass}>
+              <label className={`${typeformLabelClass} flex flex-wrap items-center gap-2`}>
                 Subject area <span className="text-red-500">*</span>
+                {profile.specializationCategory &&
+                  (profile.specializationCategory !== 'Other' || profile.customCategory.trim().length > 0) && (
+                    <span className="text-emerald-600 text-xl leading-none" aria-hidden>
+                      ✓
+                    </span>
+                  )}
               </label>
               <p className="text-sm text-slate-500 mb-4">
                 {profile.academicStatus === 'studying'
@@ -471,12 +518,12 @@ const AcademicForm: React.FC<Props> = ({
               </p>
               <TypeformToggleGroup
                 columns={2}
-                value={profile.specializationCategory}
+                value={profile.specializationCategory || ''}
                 onSelect={(value) => {
                   updateProfile({ specializationCategory: value, specialization: '', customCategory: '', customSpecialization: '' });
                   setAttemptedNext(false);
                   if (value !== 'Other' && !resumeEdit) {
-                    setTimeout(() => setStep(7), 120);
+                    afterProfileFlush(() => setStep(7));
                   }
                 }}
                 options={categories.map((cat) => ({ label: cat, value: cat }))}
@@ -484,7 +531,7 @@ const AcademicForm: React.FC<Props> = ({
               {profile.specializationCategory === 'Other' && (
                 <input
                   type="text"
-                  value={profile.customCategory}
+                  value={profile.customCategory || ''}
                   onChange={(e) => updateProfile({ customCategory: e.target.value })}
                   onKeyDown={onKeyDown}
                   placeholder="Describe your subject area"
@@ -515,9 +562,15 @@ const AcademicForm: React.FC<Props> = ({
           )}
 
           {step === 7 && (
-            <TypeformSlide slideKey={7}>
-              <label className={typeformLabelClass}>
+            <TypeformSlide slideKey={`spec-${profile.specializationCategory}-${specializationToggleOptions.map((o) => o.value).join('|')}`}>
+              <label className={`${typeformLabelClass} flex flex-wrap items-center gap-2`}>
                 Specialization <span className="text-red-500">*</span>
+                {profile.specialization &&
+                  (profile.specialization !== 'Other' || profile.customSpecialization.trim().length > 0) && (
+                    <span className="text-emerald-600 text-xl leading-none" aria-hidden>
+                      ✓
+                    </span>
+                  )}
               </label>
               <p className="text-sm text-slate-500 mb-4">
                 {profile.academicStatus === 'studying'
@@ -526,20 +579,20 @@ const AcademicForm: React.FC<Props> = ({
               </p>
               <TypeformToggleGroup
                 columns={2}
-                value={profile.specialization}
+                value={profile.specialization || ''}
                 onSelect={(value) => {
                   updateProfile({ specialization: value, customSpecialization: '' });
                   setAttemptedNext(false);
                   if (value !== 'Other' && !resumeEdit) {
-                    setTimeout(() => onCompleteSection?.(), 120);
+                    afterProfileFlush(() => onCompleteSection?.());
                   }
                 }}
-                options={subFields.map((sub) => ({ label: sub, value: sub }))}
+                options={specializationToggleOptions}
               />
               {profile.specialization === 'Other' && (
                 <input
                   type="text"
-                  value={profile.customSpecialization}
+                  value={profile.customSpecialization || ''}
                   onChange={(e) => updateProfile({ customSpecialization: e.target.value })}
                   onKeyDown={onKeyDown}
                   placeholder="Describe your specialization"
@@ -586,8 +639,8 @@ const AcademicForm: React.FC<Props> = ({
               onClick={() => updateProfile({ academicStatus: 'studying', yearOfStudy: profile.yearOfStudy === 'Alumnus' ? '' : profile.yearOfStudy })}
               className={`flex-1 py-3 rounded-xl border font-black text-sm transition-all ${
                 profile.academicStatus === 'studying' 
-                ? 'bg-[#2c4869] border-[#2c4869] text-white shadow-md' 
-                : 'bg-white border-slate-200 text-[#2c4869] hover:border-[#2c4869]/30'
+                ? 'bg-[#f58434] border-[#f58434] text-white shadow-md' 
+                : 'bg-white border-slate-200 text-[#2c4869] hover:border-[#f58434]/40'
               }`}
             >
               Currently Studying
@@ -598,8 +651,8 @@ const AcademicForm: React.FC<Props> = ({
               onClick={() => updateProfile({ academicStatus: 'graduated', yearOfStudy: 'Alumnus' })}
               className={`flex-1 py-3 rounded-xl border font-black text-sm transition-all ${
                 profile.academicStatus === 'graduated' 
-                ? 'bg-[#2c4869] border-[#2c4869] text-white shadow-md' 
-                : 'bg-white border-slate-200 text-[#2c4869] hover:border-[#2c4869]/30'
+                ? 'bg-[#f58434] border-[#f58434] text-white shadow-md' 
+                : 'bg-white border-slate-200 text-[#2c4869] hover:border-[#f58434]/40'
               }`}
             >
               Graduated / Alumni
@@ -631,7 +684,7 @@ const AcademicForm: React.FC<Props> = ({
                   {profile.academicStatus === 'studying' ? 'Degree being pursued' : 'Highest degree completed'} <span className="text-red-500 ml-1">*</span>
                 </label>
                 <select 
-                  value={profile.degreeType}
+                  value={profile.degreeType || ''}
                   onChange={(e) => updateProfile({ degreeType: e.target.value })}
                   disabled={readOnly}
                   className={`w-full px-4 py-3 rounded-xl border ${validationErrors.degreeType ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 focus:ring-2 focus:ring-[#f58434]'} outline-none transition-all text-sm font-medium`}
@@ -646,7 +699,7 @@ const AcademicForm: React.FC<Props> = ({
                 <div className="animate-in slide-in-from-top-2 duration-300">
                   <label className="block text-sm font-bold text-[#2c4869] mb-2 tracking-tight">Current year of study</label>
                   <select 
-                    value={profile.yearOfStudy}
+                    value={profile.yearOfStudy || ''}
                     onChange={(e) => updateProfile({ yearOfStudy: e.target.value })}
                     disabled={readOnly}
                     className={`w-full px-4 py-3 rounded-xl border ${validationErrors.yearOfStudy ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 focus:ring-2 focus:ring-[#f58434]'} outline-none transition-all text-sm font-medium`}
@@ -667,8 +720,14 @@ const AcademicForm: React.FC<Props> = ({
                   <label className="block text-sm font-bold text-[#2c4869] mb-2 tracking-tight">Year of graduation</label>
                   <input 
                     type="text" 
+                    inputMode="numeric"
+                    maxLength={4}
+                    autoComplete="off"
                     value={profile.graduationYear || ''}
-                    onChange={(e) => updateProfile({ graduationYear: e.target.value })}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, '').slice(0, 4);
+                      updateProfile({ graduationYear: digits });
+                    }}
                     placeholder="e.g. 2023"
                     disabled={readOnly}
                     className={`w-full px-4 py-3 rounded-xl border ${validationErrors.graduationYear ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 focus:ring-2 focus:ring-[#f58434]'} outline-none transition-all font-medium`}
@@ -766,7 +825,7 @@ const AcademicForm: React.FC<Props> = ({
                     </span>
                   </label>
                   <select 
-                    value={profile.specializationCategory}
+                    value={profile.specializationCategory || ''}
                     onChange={(e) => updateProfile({ specializationCategory: e.target.value, specialization: '', customCategory: '', customSpecialization: '' })}
                     disabled={readOnly}
                     className={`w-full px-4 py-3 rounded-xl border ${validationErrors.specializationCategory ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 focus:ring-2 focus:ring-[#f58434]'} outline-none transition-all text-sm font-medium`}
@@ -781,7 +840,7 @@ const AcademicForm: React.FC<Props> = ({
                       <label className="block text-[10px] font-black text-[#f58434] uppercase tracking-widest mb-1.5 ml-1">Please specify your subject area</label>
                       <input 
                         type="text" 
-                        value={profile.customCategory}
+                        value={profile.customCategory || ''}
                         onChange={(e) => updateProfile({ customCategory: e.target.value })}
                         placeholder="e.g. Quantum Computing, Ethnobotany..."
                         disabled={readOnly}
@@ -801,13 +860,17 @@ const AcademicForm: React.FC<Props> = ({
                     </span>
                   </label>
                   <select 
-                    value={profile.specialization}
+                    value={profile.specialization || ''}
                     onChange={(e) => updateProfile({ specialization: e.target.value, customSpecialization: '' })}
                     disabled={readOnly}
-                    className={`w-full px-4 py-3 rounded-xl border ${validationErrors.specialization ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 focus:ring-2 focus:ring-[#f58434]'} outline-none transition-all text-sm font-medium`}
+                    className={`w-full px-4 py-3 rounded-xl border ${validationErrors.specialization ? 'border-red-500 ring-2 ring-red-100' : 'border-slate-200 focus:ring-2 focus:ring-[#f58434]'} outline-none transition-all text-sm font-medium bg-white`}
                   >
                     <option value="">Select Specialization</option>
-                    {subFields.map(sub => <option key={sub} value={sub}>{sub}</option>)}
+                    {specializationToggleOptions.map((opt) => (
+                      <option key={opt.value} value={opt.value} className="bg-white">
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                   {validationErrors.specialization && <p className={formFieldErrorClass}>{validationErrors.specialization}</p>}
 
@@ -816,7 +879,7 @@ const AcademicForm: React.FC<Props> = ({
                       <label className="block text-[10px] font-black text-[#f58434] uppercase tracking-widest mb-1.5 ml-1">Please specify your specialization</label>
                       <input 
                         type="text" 
-                        value={profile.customSpecialization}
+                        value={profile.customSpecialization || ''}
                         onChange={(e) => updateProfile({ customSpecialization: e.target.value })}
                         placeholder="e.g. Deep Learning for Healthcare, Polymer Chemistry..."
                         disabled={readOnly}

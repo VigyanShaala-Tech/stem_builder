@@ -188,12 +188,18 @@ const ExpertiseForm: React.FC<Props> = ({
   const [attemptedNext, setAttemptedNext] = useState(false);
   const [limitMessage, setLimitMessage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  /** Second Enter on empty input (within window) triggers Next, matching double-Enter UX. */
+  const lastEmptyEnterAtRef = useRef<number>(0);
 
   useEffect(() => {
     if (!typeform || readOnly) return;
     const t = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(t);
   }, [step, typeform, readOnly]);
+
+  useEffect(() => {
+    lastEmptyEnterAtRef.current = 0;
+  }, [step]);
 
   const addToList = (field: keyof Profile, value: string, inputKey: keyof typeof inputs) => {
     if (readOnly) return;
@@ -295,21 +301,26 @@ const ExpertiseForm: React.FC<Props> = ({
                 ref={inputRef}
                 type="text"
                 value={inputs[cfg.inputKey]}
-                onChange={(e) => setInputs(p => ({ ...p, [cfg.inputKey]: e.target.value }))}
+                onChange={(e) => {
+                  lastEmptyEnterAtRef.current = 0;
+                  setInputs((p) => ({ ...p, [cfg.inputKey]: e.target.value }));
+                }}
                 onKeyDown={(e) => {
                   if (e.key !== 'Enter') return;
                   e.preventDefault();
-                  const list = ((profile[cfg.field] as string[]) || []);
                   const t = inputs[cfg.inputKey].trim();
-                  if (list.length >= 1 || step === TF_STEPS - 1) {
-                    finalizeAndGoNext();
-                    return;
-                  }
                   if (t) {
                     addToList(cfg.field, inputs[cfg.inputKey], cfg.inputKey);
+                    lastEmptyEnterAtRef.current = 0;
                     return;
                   }
-                  setAttemptedNext(true);
+                  const now = Date.now();
+                  if (now - lastEmptyEnterAtRef.current < 550) {
+                    lastEmptyEnterAtRef.current = 0;
+                    finalizeAndGoNext();
+                  } else {
+                    lastEmptyEnterAtRef.current = now;
+                  }
                 }}
                 placeholder={cfg.placeholder}
                 className={`${typeformInputClass(false)} flex-1`}

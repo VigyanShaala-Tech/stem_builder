@@ -432,7 +432,22 @@ const App: React.FC = () => {
       if (!prof.academicStatus) missing["academicStatus"] = "This field is required";
       if (!prof.collegeName.trim()) missing["collegeName"] = "This field is required";
       if (!prof.degreeType) missing["degreeType"] = "This field is required";
+      if (prof.academicStatus === 'studying' && !prof.yearOfStudy) missing["yearOfStudy"] = "This field is required";
+      if (prof.academicStatus === 'graduated') {
+        const gy = (prof.graduationYear || '').trim();
+        if (!gy) missing["graduationYear"] = "This field is required";
+        else if (!/^\d{4}$/.test(gy)) missing["graduationYear"] = "Enter a valid 4-digit year";
+      }
+      if (!prof.cgpa?.trim()) missing["cgpa"] = "This field is required";
       if (!prof.topLevelCategory) missing["topLevelCategory"] = "This field is required";
+      if (!prof.specializationCategory) missing["specializationCategory"] = "This field is required";
+      else if (prof.specializationCategory === 'Other' && !prof.customCategory?.trim()) {
+        missing["customCategory"] = "Please specify your subject area";
+      }
+      if (!prof.specialization) missing["specialization"] = "This field is required";
+      else if (prof.specialization === 'Other' && !prof.customSpecialization?.trim()) {
+        missing["customSpecialization"] = "Please specify your specialization";
+      }
     } else if (section === Section.SKILLS) {
       const hasExpertise = 
         prof.subjectSkills.length > 0 || 
@@ -480,40 +495,53 @@ const App: React.FC = () => {
     return missing;
   };
 
-  const validateSection = (section: Section): Record<string, string> => {
+  const validateSection = (section: Section, prof: Profile = profile): Record<string, string> => {
     const missing: Record<string, string> = {};
     if (section === Section.BASIC) {
-      if (!profile.fullName.trim()) missing["fullName"] = "Full Name is required";
-      if (!profile.whatsappNumber?.trim()) missing["whatsappNumber"] = "WhatsApp Number is required";
-      if (!STRICT_EMAIL_REGEX.test((profile.email || '').trim())) {
+      if (!prof.fullName.trim()) missing["fullName"] = "Full Name is required";
+      if (!prof.whatsappNumber?.trim()) missing["whatsappNumber"] = "WhatsApp Number is required";
+      if (!STRICT_EMAIL_REGEX.test((prof.email || '').trim())) {
         missing["email"] = "Please enter a valid email address (e.g., name@gmail.com)";
       }
-      if (!profile.location.trim()) missing["location"] = "Current location is required";
+      if (!prof.location.trim()) missing["location"] = "Current location is required";
     } else if (section === Section.ACADEMIC) {
-      if (!profile.collegeName.trim()) missing["collegeName"] = "Institution is required";
-      if (!profile.degreeType) missing["degreeType"] = "Degree is required";
-      if (!profile.yearOfStudy) missing["yearOfStudy"] = "Year of Study is required";
-      if (profile.yearOfStudy === 'Alumnus' && !profile.graduationYear?.trim()) missing["graduationYear"] = "Graduation Year is required";
-      if (!profile.cgpa.trim()) missing["cgpa"] = "CGPA is required";
-      if (!profile.topLevelCategory) missing["topLevelCategory"] = "Broad STEM Stream is required";
-      if (!profile.specializationCategory) missing["specializationCategory"] = "Specialization Category is required";
-      if (!profile.specialization) missing["specialization"] = "Specialization is required";
+      if (!prof.academicStatus) missing["academicStatus"] = "Academic status is required";
+      if (!prof.collegeName.trim()) missing["collegeName"] = "Institution is required";
+      if (!prof.degreeType) missing["degreeType"] = "Degree is required";
+      if (prof.academicStatus === 'studying') {
+        if (!prof.yearOfStudy) missing["yearOfStudy"] = "Year of Study is required";
+      }
+      if (prof.academicStatus === 'graduated') {
+        const gy = (prof.graduationYear || '').trim();
+        if (!gy) missing["graduationYear"] = "Graduation Year is required";
+        else if (!/^\d{4}$/.test(gy)) missing["graduationYear"] = "Enter a valid 4-digit year";
+      }
+      if (!prof.cgpa.trim()) missing["cgpa"] = "CGPA is required";
+      if (!prof.topLevelCategory) missing["topLevelCategory"] = "Broad STEM Stream is required";
+      if (!prof.specializationCategory) missing["specializationCategory"] = "Specialization Category is required";
+      else if (prof.specializationCategory === 'Other' && !prof.customCategory?.trim()) {
+        missing["customCategory"] = "Please specify your subject area";
+      }
+      if (!prof.specialization) missing["specialization"] = "Specialization is required";
+      else if (prof.specialization === 'Other' && !prof.customSpecialization?.trim()) {
+        missing["customSpecialization"] = "Please specify your specialization";
+      }
     } else if (section === Section.SKILLS) {
       const expertiseFilledCount = [
-        profile.subjectSkills.length > 0,
-        profile.toolSkills.length > 0,
-        profile.aiSkills.length > 0,
-        profile.professionalSkills.length > 0,
-        profile.interests.length > 0,
+        prof.subjectSkills.length > 0,
+        prof.toolSkills.length > 0,
+        prof.aiSkills.length > 0,
+        prof.professionalSkills.length > 0,
+        prof.interests.length > 0,
       ].filter(Boolean).length;
       if (expertiseFilledCount < 2) {
         missing["expertise"] = "Fill at least any two questions out of five to proceed to the next section.";
       }
     } else if (section === Section.MILESTONES) {
       const hasMilestones = 
-        profile.projects.length > 0 || 
-        profile.exams.length > 0 ||
-        profile.certifications.length > 0;
+        prof.projects.length > 0 || 
+        prof.exams.length > 0 ||
+        prof.certifications.length > 0;
 
       if (!hasMilestones) {
         missing["Projects"] = "Projects are required";
@@ -521,15 +549,15 @@ const App: React.FC = () => {
         missing["Certifications"] = "Certifications are required";
       }
 
-      profile.projects.forEach((project, index) => {
+      prof.projects.forEach((project, index) => {
         if (!project.name.trim()) missing[`projectName_${index}`] = `Project Title is required`;
         if (project.name.trim() && !project.status) missing[`projectStatus_${index}`] = `Status for ${project.name} is required`;
       });
-      profile.exams.forEach((exam, index) => {
+      prof.exams.forEach((exam, index) => {
         if (!exam.name.trim()) missing[`examName_${index}`] = `Exam Name is required`;
         if (exam.name.trim() && !exam.status) missing[`examStatus_${index}`] = `Status for ${exam.name} is required`;
       });
-      profile.certifications.forEach((cert, index) => {
+      prof.certifications.forEach((cert, index) => {
         if (!cert.name.trim()) missing[`certificationName_${index}`] = `Certification Name is required`;
         if (cert.name.trim() && !cert.status) missing[`certificationStatus_${index}`] = `Status for ${cert.name} is required`;
       });
@@ -802,9 +830,15 @@ const App: React.FC = () => {
   const level2UiProgress = level2TotalFields > 0 ? Math.round((level2FilledFields / level2TotalFields) * 100) : 0;
   const isLevel1Active = editingSection ? LEVEL_1_SECTIONS.includes(editingSection) : false;
   const isLevel2Active = editingSection ? LEVEL_2_SECTIONS.includes(editingSection) : false;
+  /** Use live draft while editing Academics so journey segments reflect full completion, not stale profile. */
+  const academicProgressProfile =
+    editingSection === Section.ACADEMIC && draftProfile ? draftProfile : profile;
+
   const completedMap: Record<Section, boolean> = {
     [Section.BASIC]: Object.keys(validateSection(Section.BASIC)).length === 0,
-    [Section.ACADEMIC]: Object.keys(validateSection(Section.ACADEMIC)).length === 0,
+    [Section.ACADEMIC]:
+      savedSections.includes(Section.ACADEMIC) ||
+      Object.keys(validateSection(Section.ACADEMIC, academicProgressProfile)).length === 0,
     [Section.SKILLS]: Object.keys(validateSection(Section.SKILLS)).length === 0,
     [Section.MILESTONES]: Object.keys(validateSection(Section.MILESTONES)).length === 0,
     [Section.REFLECTIONS]: Object.keys(validateSection(Section.REFLECTIONS)).length === 0,
@@ -1062,13 +1096,7 @@ const App: React.FC = () => {
                         : ''
                     }`}
                   >
-              <div
-                className={`transition-all duration-300 rounded-2xl sm:rounded-3xl shadow-sm px-4 py-6 sm:px-8 sm:py-10 ${
-                  section === Section.REVIEW
-                    ? 'border border-slate-100 bg-white/80'
-                    : 'border border-[#2c4869]/15 bg-[#9DD3AF]'
-                }`}
-              >
+              <div className="transition-all duration-300 rounded-2xl sm:rounded-3xl shadow-sm px-4 py-6 sm:px-8 sm:py-10 border border-[#2c4869]/15 bg-[#9DD3AF]">
                 {section === Section.REVIEW ? (
                   <ReviewPage
                     profile={profile}

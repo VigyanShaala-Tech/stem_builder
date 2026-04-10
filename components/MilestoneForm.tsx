@@ -203,6 +203,8 @@ const MilestoneForm: React.FC<Props> = ({
 
   const [msStep, setMsStep] = useState(0);
   const [attemptedNext, setAttemptedNext] = useState(false);
+  /** Step 0: distinguish missing project vs other milestone validation. */
+  const [milestoneStep0Kind, setMilestoneStep0Kind] = useState<'project' | 'mandatory' | null>(null);
   /** True after user taps Edit on a saved row; false when starting a new entry via Add buttons. */
   const [milestoneStatusShowNext, setMilestoneStatusShowNext] = useState(false);
   const inputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
@@ -222,25 +224,48 @@ const MilestoneForm: React.FC<Props> = ({
     if (msStep >= 1 && msStep <= 3 && !draftPtr) setMsStep(0);
   }, [draftPtr, msStep, typeform, readOnly]);
 
+  const savedProjectCount = useMemo(
+    () =>
+      profile.projects.filter((p) => (p?.name || '').trim().length > 0 && p.isSaved !== false).length,
+    [profile.projects]
+  );
+
   const handleMilestoneStep0Next = useCallback(() => {
-    if (milestoneMandatoryOk(profile)) setMsStep(4);
-    else setAttemptedNext(true);
-  }, [profile]);
+    if (savedProjectCount < 1) {
+      setAttemptedNext(true);
+      setMilestoneStep0Kind('project');
+      return;
+    }
+    if (!milestoneMandatoryOk(profile)) {
+      setAttemptedNext(true);
+      setMilestoneStep0Kind('mandatory');
+      return;
+    }
+    setMilestoneStep0Kind(null);
+    setAttemptedNext(false);
+    onCompleteSection?.();
+  }, [profile, savedProjectCount, onCompleteSection]);
 
   useEffect(() => {
     if (!typeform || readOnly) return;
-    if (msStep !== 0 && msStep !== 4) return;
+    if (msStep !== 0) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Enter' || e.repeat) return;
       const el = e.target as HTMLElement;
       if (el.closest('button, a[href], [role="button"]')) return;
       e.preventDefault();
-      if (msStep === 0) handleMilestoneStep0Next();
-      else onCompleteSection?.();
+      handleMilestoneStep0Next();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [typeform, readOnly, msStep, handleMilestoneStep0Next, onCompleteSection]);
+  }, [typeform, readOnly, msStep, handleMilestoneStep0Next]);
+
+  useEffect(() => {
+    if (savedProjectCount >= 1 && milestoneStep0Kind === 'project') {
+      setMilestoneStep0Kind(null);
+      setAttemptedNext(false);
+    }
+  }, [savedProjectCount, milestoneStep0Kind]);
 
   if (typeform && !readOnly) {
     const getDraftEntry = (): UnifiedEntry | null => {
@@ -293,9 +318,6 @@ const MilestoneForm: React.FC<Props> = ({
         setAttemptedNext(false);
         setMsStep(0);
         return;
-      }
-      if (msStep === 4) {
-        onCompleteSection?.();
       }
     };
 
@@ -363,7 +385,7 @@ const MilestoneForm: React.FC<Props> = ({
     return (
       <div className="min-h-[50vh] flex flex-col justify-center px-1 pb-8">
         <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-400 mb-6">
-          {msStep === 4 ? 'Done' : `Step ${msStep + 1}`}
+          Step {msStep + 1}
         </p>
         <AnimatePresence mode="wait">
           {msStep === 0 && (
@@ -378,6 +400,7 @@ const MilestoneForm: React.FC<Props> = ({
                     addProject();
                     setMsStep(1);
                     setAttemptedNext(false);
+                    setMilestoneStep0Kind(null);
                   }}
                   className="flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-blue-200 bg-blue-50/50 text-blue-800 font-bold hover:bg-blue-50"
                 >
@@ -390,6 +413,7 @@ const MilestoneForm: React.FC<Props> = ({
                     addCertification();
                     setMsStep(1);
                     setAttemptedNext(false);
+                    setMilestoneStep0Kind(null);
                   }}
                   className="flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-emerald-200 bg-emerald-50/50 text-emerald-800 font-bold hover:bg-emerald-50"
                 >
@@ -402,6 +426,7 @@ const MilestoneForm: React.FC<Props> = ({
                     addExam();
                     setMsStep(1);
                     setAttemptedNext(false);
+                    setMilestoneStep0Kind(null);
                   }}
                   className="flex items-center justify-center gap-2 py-4 rounded-2xl border-2 border-violet-200 bg-violet-50/50 text-violet-800 font-bold hover:bg-violet-50"
                 >
@@ -466,9 +491,12 @@ const MilestoneForm: React.FC<Props> = ({
                 showBack={!!onBackFromFirst}
                 onBack={goBackMs}
                 onNext={handleMilestoneStep0Next}
-                nextLabel={milestoneMandatoryOk(profile) ? 'Continue' : 'Next'}
+                nextLabel={savedProjectCount >= 1 && milestoneMandatoryOk(profile) ? 'Continue' : 'Next'}
               />
-              {attemptedNext && msStep === 0 && !milestoneMandatoryOk(profile) && (
+              {attemptedNext && msStep === 0 && milestoneStep0Kind === 'project' && (
+                <p className={formFieldErrorClass}>Please add at least one project to continue.</p>
+              )}
+              {attemptedNext && msStep === 0 && milestoneStep0Kind === 'mandatory' && (
                 <p className={formFieldErrorClass}>Choose a type above or finish a draft entry</p>
               )}
             </TypeformSlide>
@@ -548,13 +576,6 @@ const MilestoneForm: React.FC<Props> = ({
             </TypeformSlide>
           )}
 
-          {msStep === 4 && (
-            <TypeformSlide slideKey="ms4">
-              <label className={typeformLabelClass}>Ready for the next section?</label>
-              <p className="text-sm text-slate-500 mb-8">You can edit milestones anytime from the section list.</p>
-              <TypeformNav showBack onBack={() => setMsStep(0)} onNext={goNextMs} nextLabel="Continue" />
-            </TypeformSlide>
-          )}
         </AnimatePresence>
 
         
