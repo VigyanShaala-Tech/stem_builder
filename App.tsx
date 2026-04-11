@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Section, Profile, INITIAL_PROFILE, ChatPreferences, INITIAL_CHAT_PREFERENCES } from './types';
-import { REFLECTION_PROMPTS, SECTION_LEVELS } from './constants';
+import { REFLECTION_PROMPTS, SECTION_LEVELS, getExpertiseAnsweredCount, MIN_EXPERTISE_QUESTIONS } from './constants';
 import { useProfile } from './context/ProfileContext';
 import IdentityForm from './components/IdentityForm';
 import AcademicForm from './components/AcademicForm';
@@ -449,23 +449,9 @@ const App: React.FC = () => {
         missing["customSpecialization"] = "Please specify your specialization";
       }
     } else if (section === Section.SKILLS) {
-      const hasExpertise = 
-        prof.subjectSkills.length > 0 || 
-        prof.toolSkills.length > 0 || 
-        prof.aiSkills.length > 0 || 
-        prof.professionalSkills.length > 0 ||
-        prof.interests.length > 0;
-      
-      const expertiseFilledCount = [
-        prof.subjectSkills.length > 0,
-        prof.toolSkills.length > 0,
-        prof.aiSkills.length > 0,
-        prof.professionalSkills.length > 0,
-        prof.interests.length > 0,
-      ].filter(Boolean).length;
-
-      if (expertiseFilledCount < 2) {
-        missing["expertise"] = "Fill at least any two questions out of five to proceed to the next section.";
+      const expertiseFilledCount = getExpertiseAnsweredCount(prof);
+      if (expertiseFilledCount < MIN_EXPERTISE_QUESTIONS) {
+        missing["expertise"] = `Please answer at least ${MIN_EXPERTISE_QUESTIONS} questions`;
       }
     } else if (section === Section.MILESTONES) {
       const hasMilestones = 
@@ -527,15 +513,9 @@ const App: React.FC = () => {
         missing["customSpecialization"] = "Please specify your specialization";
       }
     } else if (section === Section.SKILLS) {
-      const expertiseFilledCount = [
-        prof.subjectSkills.length > 0,
-        prof.toolSkills.length > 0,
-        prof.aiSkills.length > 0,
-        prof.professionalSkills.length > 0,
-        prof.interests.length > 0,
-      ].filter(Boolean).length;
-      if (expertiseFilledCount < 2) {
-        missing["expertise"] = "Fill at least any two questions out of five to proceed to the next section.";
+      const expertiseFilledCount = getExpertiseAnsweredCount(prof);
+      if (expertiseFilledCount < MIN_EXPERTISE_QUESTIONS) {
+        missing["expertise"] = `Please answer at least ${MIN_EXPERTISE_QUESTIONS} questions`;
       }
     } else if (section === Section.MILESTONES) {
       const hasMilestones = 
@@ -720,14 +700,7 @@ const App: React.FC = () => {
       return filled >= 3;
     }
     if (section === Section.SKILLS) {
-      const filled = [
-        prof.subjectSkills.length > 0,
-        prof.toolSkills.length > 0,
-        prof.aiSkills.length > 0,
-        prof.professionalSkills.length > 0,
-        prof.interests.length > 0
-      ].filter(Boolean).length;
-      return filled >= 2;
+      return getExpertiseAnsweredCount(prof) >= MIN_EXPERTISE_QUESTIONS;
     }
     if (section === Section.MILESTONES) {
       const filled = [

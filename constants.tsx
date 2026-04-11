@@ -1,4 +1,19 @@
-import { Section } from './types';
+import { Profile, Section } from './types';
+
+/** Number of expertise prompts (subject, tools, AI, professional, interests). */
+export const EXPERTISE_TOTAL_PROMPTS = 5;
+
+/** Minimum distinct prompts that must have at least one entry to complete Expertise. */
+export const MIN_EXPERTISE_QUESTIONS = 3;
+
+export const getExpertiseAnsweredCount = (p: Profile): number =>
+  [
+    p.subjectSkills.length > 0,
+    p.toolSkills.length > 0,
+    p.aiSkills.length > 0,
+    p.professionalSkills.length > 0,
+    p.interests.length > 0,
+  ].filter(Boolean).length;
 
 export const DEGREE_OPTIONS = [
   'B.Tech / B.E.',
