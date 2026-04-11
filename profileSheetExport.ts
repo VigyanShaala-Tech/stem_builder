@@ -14,6 +14,7 @@ export const SHEET_COLUMN_HEADERS = [
   'milestones',
   'reflections',
   'chat_settings',
+  'profile'
 ] as const;
 
 function normalizeString(value: unknown): string {
@@ -115,6 +116,44 @@ function profileToSheetsRowObject(
     response_format: normalizeString(chatPreferences?.responseFormat ?? ''),
   };
 
+  /** Full snapshot for the `profile` column only (JSON string). Maps from Profile + preferences. */
+  const profileData = {
+    first_name: first,
+    last_name: last,
+    gender: normalizeString(profile.gender),
+    email: normalizeString(profile.email),
+    current_location: {
+      city: current_location.city,
+      state: current_location.state,
+      country: current_location.country,
+    },
+    academic_status: normalizeString(profile.academicStatus),
+    degree: normalizeString(profile.degreeType),
+    year_of_study: profile.academicStatus === 'studying' ? normalizeString(profile.yearOfStudy) : '',
+    graduation_year: profile.academicStatus === 'graduated' ? normalizeString(profile.graduationYear) : '',
+    stream: normalizeString(profile.topLevelCategory),
+    subject_area: normalizeString(subjectArea),
+    subject_specialization: normalizeString(subjectSpecialization),
+    institution: normalizeString(profile.collegeName),
+    cgpa_or_percent: normalizeString(profile.cgpa),
+    subject_knowledge: [...(profile.subjectSkills ?? [])],
+    tech_tools_and_it_skills: [...(profile.toolSkills ?? [])],
+    ai_and_data_skills: [...(profile.aiSkills ?? [])],
+    professional_skills: [...(profile.professionalSkills ?? [])],
+    academic_interests: [...(profile.interests ?? [])],
+    projects: milestones.projects,
+    exams: milestones.exams,
+    certifications: milestones.certifications,
+    purpose: normalizeString(r.impactPurpose),
+    strengths: normalizeString(r.strengths),
+    challenges: normalizeString(r.grittyGrowth),
+    actions: normalizeString(r.spark),
+    opportunities: normalizeString(r.opportunities),
+    barriers: normalizeString(r.threats),
+    response_length: normalizeString(chatPreferences?.responseLength ?? ''),
+    response_format: normalizeString(chatPreferences?.responseFormat ?? ''),
+  };
+
   const row: Record<string, string> = {
     key,
     first_name: first,
@@ -129,6 +168,7 @@ function profileToSheetsRowObject(
     milestones: safeJson(milestones),
     reflections: safeJson(reflections),
     chat_settings: safeJson(chat_settings),
+    profile: safeJson(profileData),
   };
 
   return row;

@@ -167,9 +167,18 @@ export async function appendProfileToGoogleSheet(
     milestones: rowMap.milestones ?? '',
     reflections: rowMap.reflections ?? '',
     chat_settings: rowMap.chat_settings ?? '',
+    profile: rowMap.profile ?? '',
   };
 
-  const jsonFields = ['identity', 'academics', 'skills_interests', 'milestones', 'reflections', 'chat_settings'] as const;
+  const jsonFields = [
+    'identity',
+    'academics',
+    'skills_interests',
+    'milestones',
+    'reflections',
+    'chat_settings',
+    'profile',
+  ] as const;
 
   function validateJsonFields(payload: Record<string, string>) {
     for (const field of jsonFields) {
